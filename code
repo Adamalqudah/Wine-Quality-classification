@@ -1,0 +1,280 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.model_selection import train_test_split
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.metrics import accuracy_score, classification_report
+from sklearn.datasets import load_iris
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import MinMaxScaler
+from sklearn.neighbors import KNeighborsClassifier
+%matplotlib inline
+import warnings
+
+from google.colab import drive
+drive.mount('/content/drive')
+
+df = pd.read_csv('/content/drive/MyDrive/winequality-red.csv')
+df.sample(5)
+
+df.info()
+df.describe()
+
+#check null value
+df.isnull().sum()
+
+# check the Distribution of the wine quality
+sns.histplot(df['quality'], color='blue')
+
+plt.figure(figsize=(18, 8))
+sns.heatmap(df.corr(), vmin=-1, vmax=1, annot=True, cmap='BrBG')
+plt.title('Correlation Map Of Wine Quality', fontdict={'fontsize':12}, pad=12);
+
+#preproccing
+df['quality'].unique()
+
+
+sns.barplot(x=feature_imp, y=feature_imp.index)
+plt.xlabel('Feature Importance Score')
+plt.ylabel('Features')
+plt.title("Visualizing Important Features")
+plt.legend()
+plt.show()
+
+
+
+
+    #If the quality value > 5, it means the quality is good and I define it as 1.
+    #If the quality value < 5, it means the quality is bad and I define it as 0.
+df['quality'] = np.where(df['quality'] > 5, 1, 0)
+df['quality'].value_counts()
+
+
+#data distribution
+plt.figure(figsize=(5,5))
+
+labels = df['quality'].value_counts().index
+sizes = df['quality'].value_counts().values
+
+# plt.pie(sizes, labels=labels,  shadow = True, startangle=360, colors=blue, autopct='%1.1f%%',textprops={'fontsize': 15})
+plt.pie(sizes, labels=labels, shadow=True, startangle=360, autopct='%1.1f%%', textprops={'fontsize': 15})
+plt.title(f'Distribution of Quality Degrees',color = 'black',fontsize = 20)
+
+plt.show()
+
+
+#Normalization
+
+from sklearn.preprocessing import MinMaxScaler
+X = df.drop(['quality'], axis=1)
+y = df['quality']
+
+# Initialize the MinMaxScaler
+scaler = MinMaxScaler()
+
+# Fit the scaler on the features and transform them
+X_scaled = scaler.fit_transform(X)
+
+# Convert the scaled data back to a DataFrame for easier handling
+Z = pd.DataFrame(X_scaled, columns=X.columns)
+
+# Display the scaled features
+print(Z.head())
+
+# If you need to convert a specific column to a NumPy array, for example, 'pH'
+x_array = np.array(Z['pH'])
+print(x_array)
+
+
+
+
+# **Splite data to training and testing**
+
+Z_train, Z_test, y_train, y_test = train_test_split(Z,y,
+                                                   stratify = y,
+                                                   test_size = 0.3,
+                                                   random_state = 111)
+
+
+# **KNN Algoritham**
+
+k = range(1,50,2)
+testing_accuracy = []
+training_accuracy = []
+score = 0
+
+for i in k:
+    knn = KNeighborsClassifier(n_neighbors = i)
+    pipe_knn = Pipeline([('scale', MinMaxScaler()), ('knn', knn)])
+    pipe_knn.fit(Z_train, y_train)
+
+    y_pred_train = pipe_knn.predict(Z_train)
+    training_accuracy.append(accuracy_score(y_train, y_pred_train))
+
+    y_pred_test = pipe_knn.predict(Z_test)
+    acc_score = accuracy_score(y_test,y_pred_test)
+    testing_accuracy.append(acc_score)
+
+    if score < acc_score:
+        score = acc_score
+        best_k = i
+
+print('Best Accuracy Score', score, 'Best K-Score', best_k)
+
+
+sns.lineplot(x = k, y=testing_accuracy)
+sns.scatterplot(x=k, y=testing_accuracy)
+sns.lineplot(x=k, y=training_accuracy)
+sns.scatterplot(x=k, y=training_accuracy)
+plt.legend(['testing accuracy', 'training accuracy'])
+
+
+#Define Model Using Best K-Score
+nn = KNeighborsClassifier(n_neighbors = 7)
+pipe_knn = Pipeline([('scale', MinMaxScaler()), ('knn', knn)])
+pipe_knn.fit(Z_train, y_train)
+
+# **Instantiate a Decision Tree classifier**
+
+from sklearn import tree
+model1 = tree.DecisionTreeClassifier()
+model1.fit(Z_train,y_train)
+
+
+
+# **Predicting the outputs for the test set 'X_test'¶**
+
+y_pred = model1.predict(Z_test)
+from sklearn.metrics import classification_report, confusion_matrix,roc_auc_score, auc
+print(classification_report(y_test, y_pred))
+print(confusion_matrix(y_test, y_pred))
+
+roc_auc_score(y_test, y_pred )
+
+feature_set = df.drop(columns = ['quality']).columns
+
+
+#A High level look into the decision tree with the depth of 2¶
+
+import graphviz
+import pydot
+dot_data = tree.export_graphviz(model1,
+                     feature_names=feature_set,
+                     out_file = 'class_tree.dot',
+                     class_names='quality',
+                     filled=True, rounded=True,
+                     special_characters=True)
+(graph,) = pydot.graph_from_dot_file('class_tree.dot')
+graph.write_png('DT_classifier.png')
+
+
+#Display the Decision tree classifer which predicts if the wine is of good quality or not
+import matplotlib.image as mpimg
+plt.subplots(figsize = (140,100))
+plt.axis('off')
+plt.imshow(mpimg.imread('DT_classifier.png'))
+
+## **Random forest **
+#Basic Random forest fitting
+Z_train, Z_test, y_train, y_test = train_test_split(Z,y,test_size=0.2)
+from sklearn.ensemble import RandomForestClassifier
+clf = RandomForestClassifier(n_estimators=100)
+clf.fit(Z_train,y_train)
+
+
+y_pred = clf.predict(Z_test)
+from sklearn import metrics
+print('Accuracy: ', metrics.accuracy_score(y_test,y_pred))
+
+#Fine tuning using RandomSearchCV
+#Random Search Cross Validation
+
+from sklearn.ensemble import RandomForestRegressor
+rf = RandomForestRegressor(random_state = 42)
+from pprint import pprint
+# Look at parameters used by our current forest
+print('Parameters currently in use:\n')
+pprint(rf.get_params())
+
+from sklearn.model_selection import RandomizedSearchCV
+# Number of trees in random forest
+n_estimators = [int(x) for x in np.linspace(start = 200, stop = 2000, num = 10)]
+# Number of features to consider at every split
+max_features = ['auto', 'sqrt']
+# Maximum number of levels in tree
+max_depth = [int(x) for x in np.linspace(2, 14, num = 7)]
+max_depth.append(None)
+# Minimum number of samples required to split a node
+min_samples_split = [2, 5, 10]
+# Minimum number of samples required at each leaf node
+min_samples_leaf = [1, 2, 4]
+# Method of selecting samples for training each tree
+bootstrap = [True, False]
+# Create the random grid
+random_grid = {'n_estimators': n_estimators,
+               'max_features': max_features,
+               'max_depth': max_depth,
+               'min_samples_split': min_samples_split,
+               'min_samples_leaf': min_samples_leaf,
+               'bootstrap': bootstrap}
+print(random_grid)
+# Use the random grid to search for best hyperparameters
+# First create the base model to tune
+rf = RandomForestRegressor()
+# Random search of parameters, using 3 fold cross validation,
+# search across 100 different combinations, and use all available cores
+rf_random = RandomizedSearchCV(estimator = rf, param_distributions = random_grid, n_iter = 100, cv = 3, verbose=2, random_state=42, n_jobs = -1)
+# Fit the random search model
+rf_random.fit(Z_train,y_train)
+
+rf_random.best_params_
+  
+from sklearn.ensemble import RandomForestClassifier
+def evaluate(model, X_test, y_test):
+    predictions = model.predict(X_test)
+    accuracy = accuracy_score(y_test, predictions) * 100
+    print('Model Performance')
+    print('Accuracy = {:0.2f}%.'.format(accuracy))
+    print('Classification Report:')
+    print(classification_report(y_test, predictions))
+
+    return accuracy
+
+# Assuming X_train, X_test, y_train, y_test are already defined
+base_model = RandomForestClassifier(n_estimators=10, random_state=42)
+base_model.fit(Z_train, y_train)
+base_accuracy = evaluate(base_model, Z_test, y_test)
+
+#Find tuning with GridSearchCV
+from sklearn.model_selection import GridSearchCV
+# Create the parameter grid based on the results of random search
+param_grid = {
+    'bootstrap': [True],
+    'max_depth': [8, 10, 12, 14],
+    'max_features': [2, 3],
+    'min_samples_leaf': [3, 4, 5],
+    'min_samples_split': [8, 10, 12],
+    'n_estimators': [100, 200, 300, 1000]
+}
+# Create a based model
+rf = RandomForestRegressor()
+# Instantiate the grid search model
+grid_search = GridSearchCV(estimator = rf, param_grid = param_grid,
+                          cv = 3, n_jobs = -1, verbose = 2)
+
+# Fit the grid search to the data
+grid_search.fit(Z_train, y_train)
+grid_search.best_params_
+
+
+
+
+
+
+
+
